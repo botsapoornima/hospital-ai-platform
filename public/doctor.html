@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Doctor - Hospital AI Platform</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1 id="dname">🏥 Doctor Dashboard</h1>
+  <nav><a href="#" onclick="logout()">Sign out</a></nav>
+</header>
+<main>
+  <div class="card">
+    <h2>Upcoming Appointments</h2>
+    <div id="appts"></div>
+  </div>
+  <div class="card">
+    <h2>Pre-Visit Questionnaire Responses</h2>
+    <p class="muted" style="margin-top:-6px;">Structured patient responses only - the AI does not record free-form clinical judgments.</p>
+    <div id="questionnaires"></div>
+  </div>
+</main>
+<script src="api.js"></script>
+<script>
+const user = requireLogin(['doctor']);
+const doctorId = user.doctorId;
+
+async function load() {
+  const doc = await API.get(`/api/doctors/${doctorId}`);
+  document.getElementById('dname').textContent = '🏥 ' + doc.name;
+
+  const appts = await API.get(`/api/doctors/${doctorId}/appointments`);
+  document.getElementById('appts').innerHTML = appts.length === 0 ? '<span class="muted">No appointments yet.</span>' :
+    '<table><tr><th>When</th><th>Type</th><th>Status</th></tr>' +
+    appts.map(a => `<tr><td>${fmtDate(a.start_at)}</td><td>${a.appointment_type}</td><td>${badge(a.status)}</td></tr>`).join('') + '</table>';
+
+  let qHtml = '';
+  for (const a of appts.filter(a => ['confirmed','completed'].includes(a.status)).slice(0, 10)) {
+    const qs = await API.get(`/api/patients/appointments/${a.id}/questionnaires`);
+    for (const q of qs) {
+      qHtml += `<div class="card" style="margin-bottom:8px;"><div class="row"><strong>Appointment ${fmtDate(a.start_at)}</strong>${badge(q.status)}</div>
+        <pre style="font-size:12px;white-space:pre-wrap;">${JSON.stringify(JSON.parse(q.responses), null, 2)}</pre></div>`;
+    }
+  }
+  document.getElementById('questionnaires').innerHTML = qHtml || '<span class="muted">No responses yet.</span>';
+}
+load();
+setInterval(load, 8000);
+</script>
+</body>
+</html>

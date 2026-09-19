@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Patient - Hospital AI Platform</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1>🏥 Hospital AI Platform</h1>
+  <nav><a href="index.html">Sign out</a></nav>
+</header>
+<main class="grid cols-2">
+  <div class="card">
+    <h2>Talk to the AI assistant</h2>
+    <p class="muted" style="margin-top:-6px;">Text stand-in for the real-time voice/telephone interface - same
+      agent, context manager and capabilities either way. Try: "I need to see a doctor for my shoulder pain this week".</p>
+    <div class="chat-window">
+      <div class="chat-log" id="log"></div>
+      <div class="chat-input">
+        <input id="text" placeholder="Type a message..." onkeydown="if(event.key==='Enter') send()" />
+        <button onclick="send()">Send</button>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h2>Your appointments</h2>
+      <div id="appts" class="muted">Say hello to the assistant to get started.</div>
+    </div>
+    <div class="card">
+      <h2>Pre-visit questionnaire</h2>
+      <div id="questionnaire" class="muted">None pending.</div>
+    </div>
+  </div>
+</main>
+<script src="api.js"></script>
+<script>
+let conversationId = null;
+let patientId = null;
+
+async function boot() {
+  const conv = await API.post('/api/ai/conversations', { channel: 'web_chat' });
+  conversationId = conv.id;
+  appendMsg('ai', "Hi! I'm your hospital assistant. What can I help you with today?");
+}
+
+function appendMsg(role, text) {
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function send() {
+  const input = document.getElementById('text');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  appendMsg('patient', text);
+  try {
+    const reply = await API.post(`/api/ai/conversations/${conversationId}/messages`, { text });
+    appendMsg('ai', reply.text);
+    await refreshSidebar();
+  } catch (e) {
+    appendMsg('ai', '(error: ' + e.message + ')');
+  }
+}
+
+async function refreshSidebar() {
+  const convInfo = await API.get(`/api/ai/conversations/${conversationId}`);
+  if (convInfo.conversation.patient_id) {
+    patientId = convInfo.conversation.patient_id;
+    const appts = await API.get(`/api/patients/${patientId}/appointments`);
+    const box = document.getElementById('appts');
+    if (appts.length === 0) { box.innerHTML = '<span class="muted">No appointments yet.</span>'; }
+    else {
+      box.innerHTML = '<table><tr><th>Doctor</th><th>Hospital</th><th>When</th><th>Status</th></tr>' +
+        appts.map(a => `<tr><td>${a.doctor_name}</td><td>${a.hospital_name}</td><td>${fmtDate(a.start_at)}</td><td>${badge(a.status)}</td></tr>`).join('') +
+        '</table>';
+    }
+
+    if (convInfo.context.appointment_id) {
+      const qs = await API.get(`/api/patients/appointments/${convInfo.context.appointment_id}/questionnaires`);
+      const qbox = document.getElementById('questionnaire');
+      if (qs.length === 0) { qbox.innerHTML = '<span class="muted">None assigned yet.</span>'; }
+      else {
+        qbox.innerHTML = qs.map(q => `<div>Status: ${badge(q.status)} <span class="muted">(assigned ${fmtDate(q.created_at)})</span></div>`).join('');
+      }
+    }
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

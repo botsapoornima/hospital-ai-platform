@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Platform Admin - Hospital AI Platform</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1>🏥 Platform Admin</h1>
+  <nav><a href="#" onclick="logout()">Sign out</a></nav>
+</header>
+<main>
+  <div class="grid cols-4" id="stats"></div>
+
+  <div class="card">
+    <h2>Hospital Applications</h2>
+    <div id="hospitals"></div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Reconciliation Queue (Unresolved EHR Outcomes)</h2>
+      <div id="recon"></div>
+    </div>
+    <div class="card">
+      <h2>Operational Events</h2>
+      <div id="opev"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Audit Log</h2>
+    <div id="audit"></div>
+  </div>
+
+  <div class="card">
+    <h2>Trace a Booking (correlation ID)</h2>
+    <div class="row"><input id="corr" placeholder="corr_..." style="flex:1;" /><button onclick="trace()">Trace</button></div>
+    <pre id="traceOut" class="muted" style="white-space:pre-wrap;font-size:12px;"></pre>
+  </div>
+</main>
+<script src="api.js"></script>
+<script>
+const user = requireLogin(['platform_admin']);
+
+async function loadStats() {
+  const o = await API.get('/api/admin/overview');
+  document.getElementById('stats').innerHTML = `
+    <div class="card stat"><div class="value">${o.hospitals.total}</div><div class="label">Hospitals (${o.hospitals.pending} pending review)</div></div>
+    <div class="card stat"><div class="value">${o.doctors}</div><div class="label">Doctors</div></div>
+    <div class="card stat"><div class="value">${o.appointments}</div><div class="label">Appointments</div></div>
+    <div class="card stat"><div class="value">${o.reconciliationsOpen}</div><div class="label">Open Reconciliations</div></div>
+  `;
+}
+
+async function loadHospitals() {
+  const list = await API.get('/api/hospitals');
+  document.getElementById('hospitals').innerHTML = '<table><tr><th>Name</th><th>Status</th><th>Actions</th></tr>' +
+    list.map(h => `<tr><td>${h.name}</td><td>${badge(h.status)}</td><td>
+      ${['submitted','under_review'].includes(h.status) ? `<button onclick="approve('${h.id}')">Approve</button> <button class="secondary" onclick="reject('${h.id}')">Reject</button>` : ''}
+      ${h.status === 'approved' ? `<button class="secondary" onclick="suspend('${h.id}')">Suspend</button>` : ''}
+      ${h.status === 'suspended' ? `<button onclick="reactivate('${h.id}')">Reactivate</button>` : ''}
+    </td></tr>`).join('') + '</table>';
+}
+async function approve(id) { await API.post(`/api/hospitals/${id}/approve`, {}); await loadHospitals(); await loadStats(); }
+async function reject(id) { await API.post(`/api/hospitals/${id}/reject`, { reason: 'Does not meet requirements' }); await loadHospitals(); }
+async function suspend(id) { await API.post(`/api/hospitals/${id}/suspend`, {}); await loadHospitals(); }
+async function reactivate(id) { await API.post(`/api/hospitals/${id}/reactivate`, {}); await loadHospitals(); }
+
+async function loadRecon() {
+  const list = await API.get('/api/admin/reconciliations');
+  const box = document.getElementById('recon');
+  if (list.length === 0) { box.innerHTML = '<span class="muted">No open reconciliations.</span>'; return; }
+  box.innerHTML = '<table><tr><th>Reason</th><th>Status</th><th>When</th></tr>' +
+    list.slice(0, 10).map(r => `<tr><td>${r.reason}</td><td>${badge(r.status)}</td><td>${fmtDate(r.created_at)}</td></tr>`).join('') + '</table>';
+}
+
+async function loadOpEvents() {
+  const list = await API.get('/api/admin/operational-events?limit=15');
+  document.getElementById('opev').innerHTML = '<table><tr><th>Event</th><th>Severity</th><th>When</th></tr>' +
+    list.map(e => `<tr><td>${e.event_type}</td><td>${badge(e.severity)}</td><td>${fmtDate(e.created_at)}</td></tr>`).join('') + '</table>';
+}
+
+async function loadAudit() {
+  const list = await API.get('/api/admin/audit?limit=20');
+  document.getElementById('audit').innerHTML = '<table><tr><th>Action</th><th>Entity</th><th>When</th><th>Correlation</th></tr>' +
+    list.map(e => `<tr><td>${e.action}</td><td>${e.entity_type || ''}</td><td>${fmtDate(e.created_at)}</td><td><code style="font-size:11px;">${(e.correlation_id||'').slice(0,18)}</code></td></tr>`).join('') + '</table>';
+}
+
+async function trace() {
+  const corr = document.getElementById('corr').value.trim();
+  if (!corr) return;
+  const t = await API.get(`/api/admin/trace/${corr}`);
+  document.getElementById('traceOut').textContent = JSON.stringify(t, null, 2);
+}
+
+async function refreshAll() { await Promise.all([loadStats(), loadHospitals(), loadRecon(), loadOpEvents(), loadAudit()]); }
+refreshAll();
+setInterval(refreshAll, 8000);
+</script>
+</body>
+</html>

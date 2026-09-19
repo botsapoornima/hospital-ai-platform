@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Hospital AI Platform</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar"><h1>🏥 Hospital AI Platform</h1></header>
+<main>
+  <div class="login-box">
+    <div class="card">
+      <h2>Sign in</h2>
+      <label>Email</label>
+      <input id="email" type="email" value="admin@platform.dev" />
+      <label>Password</label>
+      <input id="password" type="password" value="admin123" />
+      <div class="row" style="margin-top:16px;">
+        <button onclick="doLogin()">Sign in</button>
+        <a href="patient.html" style="margin-left:auto;font-size:13px;">Continue as patient (no login) →</a>
+      </div>
+      <div id="err" class="muted" style="color:var(--err);"></div>
+    </div>
+    <div class="card hint">
+      <strong>Demo accounts</strong> (seeded):<br/>
+      Platform admin: admin@platform.dev / admin123<br/>
+      Riverside hospital admin: admin@riverside.example / admin123<br/>
+      Riverside doctor: rao@riverside.example / doctor123<br/>
+      Lakeside hospital admin: admin@lakeside.example / admin123<br/><br/>
+      Patients don't log in with a password here - the AI agent identifies them by
+      phone number in conversation (e.g. Jordan Smith, +1-555-9999), the same way a
+      real voice/telephone flow would.
+    </div>
+  </div>
+</main>
+<script src="api.js"></script>
+<script>
+async function doLogin() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  document.getElementById('err').textContent = '';
+  try {
+    const { token, user } = await API.post('/api/auth/login', { email, password });
+    API.setSession(token, user);
+    if (user.role === 'platform_admin') window.location.href = 'admin.html';
+    else if (user.role === 'hospital_admin') window.location.href = 'hospital.html';
+    else if (user.role === 'doctor') window.location.href = 'doctor.html';
+    else window.location.href = 'patient.html';
+  } catch (e) {
+    document.getElementById('err').textContent = e.message;
+  }
+}
+// auto-redirect if already logged in
+if (API.token() && API.user()) {
+  const r = API.user().role;
+  if (r === 'platform_admin') window.location.href = 'admin.html';
+}
+</script>
+</body>
+</html>

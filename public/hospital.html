@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Hospital Admin - Hospital AI Platform</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <h1 id="hname">🏥 Hospital Admin</h1>
+  <nav><a href="#" onclick="logout()">Sign out</a></nav>
+</header>
+<main>
+  <div class="grid cols-3" id="stats"></div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Doctors</h2>
+      <div id="doctors"></div>
+      <details style="margin-top:12px;">
+        <summary class="muted">Add a doctor</summary>
+        <div class="grid" style="margin-top:10px;">
+          <input id="docName" placeholder="Doctor name" />
+          <input id="docSpecialty" placeholder="Specialty name (existing or new)" />
+          <input id="docDuration" placeholder="Appointment duration (min)" value="30" />
+          <button onclick="addDoctor()">Create + Activate + Generate 14 Days Availability</button>
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <h2>Appointments</h2>
+      <div id="appointments"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>AI / Integration Activity</h2>
+    <div id="ops"></div>
+  </div>
+
+  <div class="card">
+    <h2>Audit Log</h2>
+    <div id="audit"></div>
+  </div>
+</main>
+<script src="api.js"></script>
+<script>
+const user = requireLogin(['hospital_admin']);
+const hospitalId = user.hospitalId;
+
+async function loadOverview() {
+  const o = await API.get(`/api/admin/hospital-overview/${hospitalId}`);
+  document.getElementById('hname').textContent = '🏥 ' + o.hospital.name;
+  document.getElementById('stats').innerHTML = `
+    <div class="card stat"><div class="value">${o.doctors}</div><div class="label">Doctors</div></div>
+    <div class="card stat"><div class="value">${o.appointmentsByStatus.reduce((s,x)=>s+x.n,0)}</div><div class="label">Appointments</div></div>
+    <div class="card stat"><div class="value">${o.reconciliationsOpen}</div><div class="label">Open Reconciliations</div></div>
+  `;
+}
+
+async function loadDoctors() {
+  const list = await API.get(`/api/hospitals/${hospitalId}/doctors`);
+  document.getElementById('doctors').innerHTML = '<table><tr><th>Name</th><th>Status</th></tr>' +
+    list.map(d => `<tr><td>${d.name}</td><td>${badge(d.status)}</td></tr>`).join('') + '</table>';
+}
+
+async function ensureSpecialty(name) {
+  const list = await API.get(`/api/hospitals/${hospitalId}/specialties`);
+  const existing = list.find(s => s.name.toLowerCase() === name.toLowerCase());
+  if (existing) return existing.id;
+  const created = await API.post(`/api/hospitals/${hospitalId}/specialties`, { name });
+  return created.id;
+}
+
+async function addDoctor() {
+  const name = document.getElementById('docName').value.trim();
+  const specialtyName = document.getElementById('docSpecialty').value.trim();
+  const duration = parseInt(document.getElementById('docDuration').value, 10) || 30;
+  if (!name) return;
+  const specialtyId = specialtyName ? await ensureSpecialty(specialtyName) : undefined;
+  const doctor = await API.post(`/api/hospitals/${hospitalId}/doctors`, { name, specialtyId, appointmentDurationMinutes: duration });
+  await API.post(`/api/hospitals/doctors/${doctor.id}/activate`, {});
+  await API.post(`/api/hospitals/doctors/${doctor.id}/working-hours`, { hours: [1,2,3,4,5].map(d => ({ dayOfWeek: d, startTime: '09:00', endTime: '17:00' })) });
+  const from = new Date(), to = new Date(Date.now() + 14*24*60*60*1000);
+  await API.post(`/api/hospitals/doctors/${doctor.id}/generate-slots`, { fromISO: from.toISOString(), toISO: to.toISOString() });
+  document.getElementById('docName').value = '';
+  document.getElementById('docSpecialty').value = '';
+  await loadDoctors();
+  await loadOverview();
+}
+
+async function loadAppointments() {
+  const list = await API.get(`/api/hospitals/${hospitalId}/appointments`);
+  document.getElementById('appointments').innerHTML = '<table><tr><th>When</th><th>Status</th></tr>' +
+    list.slice(0, 15).map(a => `<tr><td>${fmtDate(a.start_at)}</td><td>${badge(a.status)}</td></tr>`).join('') + '</table>';
+}
+
+async function loadOps() {
+  const list = await API.get(`/api/admin/operational-events?limit=15`);
+  document.getElementById('ops').innerHTML = '<table><tr><th>Event</th><th>Severity</th><th>When</th></tr>' +
+    list.map(e => `<tr><td>${e.event_type}</td><td>${badge(e.severity)}</td><td>${fmtDate(e.created_at)}</td></tr>`).join('') + '</table>';
+}
+
+async function loadAudit() {
+  const list = await API.get(`/api/admin/audit?limit=15`);
+  document.getElementById('audit').innerHTML = '<table><tr><th>Action</th><th>When</th></tr>' +
+    list.map(e => `<tr><td>${e.action}</td><td>${fmtDate(e.created_at)}</td></tr>`).join('') + '</table>';
+}
+
+async function refreshAll() { await Promise.all([loadOverview(), loadDoctors(), loadAppointments(), loadOps(), loadAudit()]); }
+refreshAll();
+setInterval(refreshAll, 8000);
+</script>
+</body>
+</html>
