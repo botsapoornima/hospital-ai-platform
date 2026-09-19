@@ -4,6 +4,9 @@
   "description": "Multi-tenant healthcare intake, scheduling & pre-visit AI agent platform (prototype)",
   "type": "module",
   "main": "server.js",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node server.js",
     "seed": "node src/db/seed.js",
@@ -13,7 +16,7 @@
     "better-sqlite3": "^11.3.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
-    "jsonwebtoken": "^9.0.2",
+    "jsonwebtoken": "^9.0.0",
     "uuid": "^9.0.1",
     "zod": "^3.23.8"
   },
