@@ -57,7 +57,6 @@
 let conversationId = null;
 let patientId = null;
 
-const user = requireLogin(['patient']);
 
 async function boot() {
   try {
@@ -119,10 +118,7 @@ async function refreshSidebar() {
     if (convInfo.conversation.patient_id) {
       patientId = convInfo.conversation.patient_id;
 
-      const appts = await API.get(
-        `/api/patients/${patientId}/appointments`
-      );
-
+      const appts = await API.get(`/api/ai/conversations/${conversationId}/appointments`);
       const box = document.getElementById('appts');
 
       if (appts.length === 0) {

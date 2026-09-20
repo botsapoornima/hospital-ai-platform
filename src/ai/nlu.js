@@ -77,10 +77,14 @@ export function detectIntent(text, hasActiveAppointmentContext) {
   if (/\b(reschedule|move|change).*(appointment|that|it)\b/.test(lower) || (hasActiveAppointmentContext && /\b(actually|instead)\b/.test(lower) && parseTimeframe(lower))) {
     return 'reschedule_appointment';
   }
-  if (/\b(cancel)\b/.test(lower)) return 'cancel_appointment';
-  if (/\b(book|schedule|see a doctor|appointment|need to see)\b/.test(lower)) return 'book_appointment';
-  if (/\b(status|when is my|do i have an appointment|my appointment)\b/.test(lower)) return 'check_status';
-  if (/\b(hi|hello|hey)\b/.test(lower) && lower.length < 20) return 'greeting';
+if (/\b(cancel)\b/.test(lower)) return 'cancel_appointment';
+
+if (/\b(status|check|when is my|do i have an appointment|my appointment)\b/.test(lower))
+  return 'check_status';
+
+if (/\b(book|schedule|see a doctor|appointment|need to see)\b/.test(lower))
+  return 'book_appointment';
+    if (/\b(hi|hello|hey)\b/.test(lower) && lower.length < 20) return 'greeting';
   if (/\b(human|agent|representative|speak to someone)\b/.test(lower)) return 'human_escalation';
   return 'unknown';
 }
